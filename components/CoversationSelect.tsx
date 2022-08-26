@@ -28,7 +28,7 @@ const CoversationSelect = ({ id, conversationUsers } : {id: string, conversation
   return (
     <StyledContainer onClick={onSelectConversation}>
         <RecipientAvatar recipient={recipient} recipientEmail={recipientEmail} ></RecipientAvatar>
-        <span>{recipientEmail}</span>
+        <span>{recipient?.nickname ? recipient.nickname : recipientEmail}</span>
     </StyledContainer>
   )
 }

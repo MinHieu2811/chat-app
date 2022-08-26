@@ -1,9 +1,9 @@
-import InsertEmoticonIcon  from "@mui/icons-material/InsertEmoticon"
+import InsertEmoticonIcon from "@mui/icons-material/InsertEmoticon"
 import MicIcon from '@mui/icons-material/Mic'
 import SendIcon from "@mui/icons-material/Send"
 import AttachFileIcon from "@mui/icons-material/AttachFile"
 import MoreVertIcon from "@mui/icons-material/MoreVert"
-import { IconButton } from "@mui/material"
+import { IconButton, Menu, MenuItem } from "@mui/material"
 import { useRouter } from "next/router"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { useCollection } from "react-firebase-hooks/firestore"
@@ -15,6 +15,7 @@ import { convertFirestoreTimestampToString, generateQueryGetMessages, transformM
 import Message from "./Message"
 import RecipientAvatar from "./RecipientAvatar"
 import { KeyboardEventHandler, MouseEventHandler, useRef, useState } from "react"
+import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, TextField } from "@mui/material"
 import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore"
 
 const StyledRecipientHeader = styled.div`
@@ -85,6 +86,14 @@ const ConversationScreen = ({ conversation, messages }: { conversation: Conversa
     const conversationUsers = conversation.users
 
     const { recipient, recipientEmail } = useRecipients(conversationUsers)
+    const [nickname, setNickname] = useState('')
+    const [isOpenDialog, setIsOpenDialog] = useState(false)
+
+    const toggleNewDialog = (isOpenDialog: boolean) => {
+        setIsOpenDialog(isOpenDialog)
+
+        if (!isOpenDialog) setNickname('')
+    }
 
     const router = useRouter()
     const conversationId = router.query.id
@@ -111,7 +120,7 @@ const ConversationScreen = ({ conversation, messages }: { conversation: Conversa
         // update last seen in 'users' collection
         await setDoc(doc(db, 'users', loggedInUser?.email as string), {
             lastSeen: serverTimestamp()
-        }, {merge: true}) 
+        }, { merge: true })
         // just update what is changed
 
         // add new message to 'messages' collection
@@ -130,23 +139,44 @@ const ConversationScreen = ({ conversation, messages }: { conversation: Conversa
     }
 
     const sendMessageOnEnter: KeyboardEventHandler<HTMLInputElement> = event => {
-        if(event.key === 'Enter'){
+        if (event.key === 'Enter') {
             event.preventDefault()
-            if(!newMessage) return
+            if (!newMessage) return
             addMessageToDbAndUpdateLastSeen()
         }
     }
 
     const sendMessageOnClick: MouseEventHandler<HTMLButtonElement> = event => {
         event.preventDefault()
-        if(!newMessage) return
+        if (!newMessage) return
         addMessageToDbAndUpdateLastSeen()
     }
 
     const endOfMessageRef = useRef<HTMLDivElement>(null)
 
     const scrollToBottom = () => {
-        endOfMessageRef.current?.scrollIntoView({behavior: 'smooth'})
+        endOfMessageRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const open = Boolean(anchorEl);
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+        setAnchorEl(event.currentTarget);
+    };
+
+    const handleClose = () => {
+        setAnchorEl(null);
+    };
+
+    const emailId : string = conversationUsers.filter(e => e !== loggedInUser?.email)[0]
+
+    const updateNickname = async () => {
+        if(!nickname) return
+        await setDoc(doc(db, 'users', emailId as string), {
+            nickname: nickname
+        }, { merge: true })
+
+        toggleNewDialog(false)
     }
 
     return <>
@@ -155,7 +185,7 @@ const ConversationScreen = ({ conversation, messages }: { conversation: Conversa
 
             <StyledHeaderInfo>
                 <StyledH3>
-                    {recipientEmail}
+                    {recipient?.nickname ? recipient.nickname : recipientEmail}
                 </StyledH3>
                 {recipient && <span>Last active: {convertFirestoreTimestampToString(recipient.lastSeen)}</span>}
             </StyledHeaderInfo>
@@ -163,10 +193,49 @@ const ConversationScreen = ({ conversation, messages }: { conversation: Conversa
                 <IconButton>
                     <AttachFileIcon />
                 </IconButton>
-                <IconButton>
+                <IconButton
+                    id="basic-button"
+                    aria-controls={open ? 'basic-menu' : undefined}
+                    aria-haspopup="true"
+                    aria-expanded={open ? 'true' : undefined}
+                    onClick={handleClick}
+                >
                     <MoreVertIcon />
                 </IconButton>
             </StyledHeaderIcon>
+            <Menu
+                id="basic-menu"
+                anchorEl={anchorEl}
+                open={open}
+                onClose={handleClose}
+                MenuListProps={{
+                    'aria-labelledby': 'basic-button',
+                }}
+            >
+                <MenuItem onClick={() => toggleNewDialog(true)}>Update nickname</MenuItem>
+                <MenuItem onClick={handleClose}>Update background</MenuItem>
+            </Menu>
+            <Dialog open={isOpenDialog} onClose={() => toggleNewDialog(false)}>
+                <DialogTitle>Update Nickname</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Please enter a nickname for the user 
+                    </DialogContentText>
+                    <TextField
+                        autoFocus
+                        label="Nickname"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={nickname}
+                        onChange={(e) => setNickname(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => toggleNewDialog(false)}>Cancel</Button>
+                    <Button disabled={!recipientEmail} onClick={updateNickname}>Update</Button>
+                </DialogActions>
+            </Dialog>
         </StyledRecipientHeader>
 
         <StyledMessageContainer>
@@ -177,7 +246,7 @@ const ConversationScreen = ({ conversation, messages }: { conversation: Conversa
 
         <StyledInputContainer>
             <InsertEmoticonIcon />
-            <StyledInput value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={sendMessageOnEnter}/>
+            <StyledInput value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={sendMessageOnEnter} />
             <IconButton onClick={sendMessageOnClick} disabled={!newMessage}>
                 <SendIcon />
             </IconButton>

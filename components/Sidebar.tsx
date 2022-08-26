@@ -12,10 +12,11 @@ import { auth, db } from "../config/firebase"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { useState } from "react"
 import * as EmailValidator from 'email-validator'
-import { addDoc, collection, query, where } from "firebase/firestore"
+import { addDoc, collection, DocumentData, query, QueryDocumentSnapshot, where } from "firebase/firestore"
 import { useCollection } from 'react-firebase-hooks/firestore'
 import { Conversation } from "../types"
 import ConversationSelect from './CoversationSelect'
+import useDebounce from "../utils/useDebounce"
 
 const StyledContainer = styled.div`
     height: 100vh;
@@ -78,6 +79,8 @@ const Sidebar = () => {
 
     const [recipientEmail, setRecipientEmail] = useState('')
 
+    const [keyword, setKeyword] = useState('')
+
     const toggleNewDialog = (isOpenDialog: boolean) => {
         setIsOpenDialog(isOpenDialog)
 
@@ -117,7 +120,12 @@ const Sidebar = () => {
         }
     }
 
-    // 1:43:42
+    const handlerSearch = (keyword: string) : QueryDocumentSnapshot<DocumentData>[] | undefined => {
+        const debounceVal = useDebounce({keyword: keyword, delay: 700})
+        return conversationSnapshot?.docs.filter((conversation) => ((conversation.data() as Conversation).users[1].includes(debounceVal)))
+    }
+
+    const userMatch = handlerSearch(keyword)
 
     return (
         <StyledContainer>
@@ -146,15 +154,18 @@ const Sidebar = () => {
             </StyledHeader>
             <StyledSearch>
                 <SearchIcon />
-                <StyledSearchInput placeholder='Search in conversation' />
+                <StyledSearchInput value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder='Searching by email...' />
             </StyledSearch>
             <StyledSidebarButton onClick={() => toggleNewDialog(true)}>
                 Start a new conversation
             </StyledSidebarButton>
 
             {/* list of conversation */}
-            {conversationSnapshot?.docs.map(conversation => <ConversationSelect key={conversation.id} id={conversation.id} conversationUsers={(conversation.data() as Conversation).users }/>)}
-
+            {userMatch?.length === 0 ? (
+                conversationSnapshot?.docs.map(conversation => <ConversationSelect key={conversation.id} id={conversation.id} conversationUsers={(conversation.data() as Conversation).users} /> )
+            ) : (
+                userMatch && userMatch.map(conversation => <ConversationSelect key={conversation.id} id={conversation.id} conversationUsers={(conversation.data() as Conversation).users} />)
+            )}
             <Dialog open={isOpenDialog} onClose={() => toggleNewDialog(false)}>
                 <DialogTitle>New Conversation</DialogTitle>
                 <DialogContent>
